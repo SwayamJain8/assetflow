@@ -14,6 +14,7 @@ import { categoriesRouter } from "./modules/categories/categories.routes";
 import { departmentsRouter } from "./modules/departments/departments.routes";
 import { filesRouter } from "./modules/files/files.routes";
 import { healthRouter } from "./modules/health/health.routes";
+import { maintenanceRouter } from "./modules/maintenance/maintenance.routes";
 import { usersRouter } from "./modules/users/users.routes";
 
 /**
@@ -48,6 +49,7 @@ export function createApp() {
   app.route("/api", assetsRouter);
   app.route("/api", allocationsRouter);
   app.route("/api", bookingsRouter);
+  app.route("/api", maintenanceRouter);
   app.route("/api", filesRouter);
 
   app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
