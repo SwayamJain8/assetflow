@@ -1,0 +1,1 @@
+ALTER TABLE "assets" ALTER COLUMN "asset_tag" SET DEFAULT 'AF-' || lpad(nextval('asset_tag_seq')::text, 4, '0');

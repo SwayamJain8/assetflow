@@ -6,9 +6,11 @@ import { secureHeaders } from "hono/secure-headers";
 import { env } from "./config/env";
 import { createRouter } from "./lib/router";
 import { onError, onNotFound } from "./middleware/error-handler";
+import { assetsRouter } from "./modules/assets/assets.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { categoriesRouter } from "./modules/categories/categories.routes";
 import { departmentsRouter } from "./modules/departments/departments.routes";
+import { filesRouter } from "./modules/files/files.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { usersRouter } from "./modules/users/users.routes";
 
@@ -41,6 +43,8 @@ export function createApp() {
   app.route("/api", departmentsRouter);
   app.route("/api", categoriesRouter);
   app.route("/api", usersRouter);
+  app.route("/api", assetsRouter);
+  app.route("/api", filesRouter);
 
   app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
     type: "http",

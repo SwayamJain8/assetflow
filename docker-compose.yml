@@ -43,6 +43,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "4000:4000"
+    volumes:
+      # Uploaded asset photos and org logos. Without this the container's
+      # filesystem is ephemeral and every image vanishes on redeploy.
+      - ./backend/uploads:/app/uploads
 
 volumes:
   postgres-data:

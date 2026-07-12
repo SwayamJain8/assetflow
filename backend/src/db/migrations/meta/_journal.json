@@ -8,6 +8,13 @@
       "when": 1783835344012,
       "tag": "0000_typical_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783837535013,
+      "tag": "0001_wonderful_dexter_bennett",
+      "breakpoints": true
     }
   ]
 }

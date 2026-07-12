@@ -35,8 +35,19 @@ export const assets = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
 
-    // DEFAULT is attached in the migration: 'AF-' || lpad(nextval(...), 4, '0')
-    assetTag: text("asset_tag").notNull(),
+    /**
+     * AF-0001, AF-0002 … minted by a PostgreSQL SEQUENCE.
+     *
+     * Declared here (not only in the migration) so Drizzle knows the column has a
+     * database-side default and stops demanding one on insert. The sequence itself
+     * is created in the migration — Drizzle cannot express CREATE SEQUENCE.
+     *
+     * nextval() is atomic, so two concurrent registrations cannot collide. A
+     * read-max-then-increment in application code would.
+     */
+    assetTag: text("asset_tag")
+      .notNull()
+      .default(sql`'AF-' || lpad(nextval('asset_tag_seq')::text, 4, '0')`),
 
     name: text("name").notNull(),
     categoryId: uuid("category_id").references(() => assetCategories.id, {
