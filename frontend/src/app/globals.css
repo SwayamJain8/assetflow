@@ -139,10 +139,49 @@
     border-color: var(--border);
   }
 
+  /*
+   * `color-scheme` must be declared in CSS, not only set from JS.
+   *
+   * It is what tells the BROWSER to render its own native widgets dark — the
+   * <select> popup list, scrollbars, date pickers, form controls. Those popups are
+   * painted by the OS/browser and our CSS cannot reach inside them.
+   */
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
   body {
     background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * The <option> list needs explicit colours as well.
+   *
+   * `color-scheme: dark` alone is not enough on every platform: an <option>
+   * inherits `color` from its <select> — which is our near-white --text — while the
+   * popup keeps the platform's default white background. The result is white text
+   * on white, i.e. an invisible dropdown. Setting both ends of the pair here fixes
+   * every <select> in the app at once, rather than per component.
+   */
+  select {
+    color-scheme: inherit;
+  }
+
+  option,
+  optgroup {
+    background-color: var(--surface);
+    color: var(--text);
+  }
+
+  option:checked,
+  option:hover {
+    background-color: var(--surface-3);
   }
 
   /*
