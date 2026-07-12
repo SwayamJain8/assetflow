@@ -1,0 +1,48 @@
+# Local dev + EC2 deployment. The frontend is NOT here — it deploys to Vercel.
+#
+#   docker compose up -d          # start Postgres + the API
+#   docker compose up -d postgres # just the DB, then run `bun dev` on the host
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: assetflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-assetflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-assetflow}
+      POSTGRES_DB: ${POSTGRES_DB:-assetflow}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # The API must not start against a DB that is not yet accepting connections.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-assetflow} -d ${POSTGRES_DB:-assetflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: assetflow-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 4000
+      # Host is the compose service name, not localhost — containers have their
+      # own network namespace.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-assetflow}:${POSTGRES_PASSWORD:-assetflow}@postgres:5432/${POSTGRES_DB:-assetflow}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (min 32 chars)}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-604800}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "4000:4000"
+
+volumes:
+  postgres-data:

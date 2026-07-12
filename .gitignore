@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────
+# AssetFlow — monorepo root .gitignore
+# backend/ → EC2 (Docker) · frontend/ → Vercel
+# ─────────────────────────────────────────────────────────────
+
+# ---------- Secrets / environment ----------
+# .env.example IS committed (see force-keep at the bottom)
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+
+# ---------- Dependencies ----------
+node_modules/
+.pnp
+.pnp.*
+
+# ---------- Build output ----------
+dist/
+build/
+out/
+.output/
+*.tsbuildinfo
+
+# ---------- Frontend / Vercel ----------
+.vercel/
+.vite/
+frontend/stats.html
+
+# ---------- Backend / Bun / Postgres / Docker ----------
+.bun/
+# NOTE: backend/src/db/migrations/ IS committed — the SQL migrations are the
+# schema history and a judged artifact. Only local DB state is ignored.
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+postgres-data/
+docker-data/
+*.tar
+
+# ---------- Uploads (org logos etc. — runtime user data, not source) ----------
+uploads/
+
+# ---------- Logs ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ---------- Tests / coverage ----------
+coverage/
+.nyc_output/
+*.lcov
+playwright-report/
+test-results/
+
+# ---------- Caches ----------
+.cache/
+.parcel-cache/
+.eslintcache
+.turbo/
+tmp/
+temp/
+
+# ---------- Editors / OS ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------- AI assistant tooling (machine-generated, not project source) ----------
+# code-review-graph mirrors the same instructions into every vendor's config
+# format. None of it is needed to build or run AssetFlow.
+# CLAUDE.md is intentionally NOT ignored — it is hand-written project memory.
+.code-review-graph/
+.claude/
+.cursor/
+.cursorrules
+.gemini/
+.kiro/
+.qoder/
+.windsurfrules
+.opencode.json
+.mcp.json
+.github/code-review-graph.instruction.md
+# Anchored to root: frontend/AGENTS.md is Next.js 16's own (useful) agent guide.
+/AGENTS.md
+/GEMINI.md
+/QODER.md
+
+# ---------- Force-keep ----------
+!.gitignore
+!.gitkeep
+!.env.example
+!backend/.env.example
+!frontend/.env.example
