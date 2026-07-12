@@ -1,6 +1,7 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 
 import { pingDatabase } from "../../config/db";
+import { createRouter } from "../../lib/router";
 
 const HealthResponse = z
   .object({
@@ -27,7 +28,7 @@ const healthRoute = createRoute({
   },
 });
 
-export const healthRouter = new OpenAPIHono().openapi(healthRoute, async (c) => {
+export const healthRouter = createRouter().openapi(healthRoute, async (c) => {
   const databaseUp = await pingDatabase();
 
   const body = {
