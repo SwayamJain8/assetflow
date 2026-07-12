@@ -13,22 +13,86 @@
 import { sql } from "drizzle-orm";
 
 import { closeDatabase, db } from "../config/db";
+import { env } from "../config/env";
 import * as s from "./schema";
 
 const PASSWORD = "password123";
 
-/** Today at a given wall-clock hour, so seeded bookings always land on "today". */
-function todayAt(hour: number, minute = 0): Date {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  return d;
+/**
+ * Seeded times are built in the ORGANIZATION'S timezone, never the process's.
+ *
+ * `new Date().setHours(9)` means "09:00 wherever this code happens to be running".
+ * On a laptop that is IST; inside the Docker container it is UTC. Seeding from the
+ * container therefore stored Room B2's "09:00–10:00" booking as 09:00 UTC, which a
+ * user in India sees as 14:30 — and the spec's headline scenario silently stops
+ * being about 9am.
+ *
+ * The helpers below pin every seeded time to APP_TIMEZONE, so `docker compose exec
+ * api bun run db:seed` and `bun run db:seed` on the host produce identical data.
+ */
+const TZ = env.APP_TIMEZONE;
+
+/**
+ * The calendar fields of `instant`, as read in `zone`.
+ *
+ * Built from formatToParts with explicit numeric options rather than a locale's
+ * date string. Bun's Alpine image ships a trimmed ICU, so an "en-CA" format that
+ * yields YYYY-MM-DD on a laptop can silently fall back to M/D/YYYY in the
+ * container — which then parses as an invalid Date. Numeric parts are locale-proof.
+ */
+function partsIn(instant: Date, zone: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(instant)
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    // Some ICU builds render midnight as "24" rather than "00".
+    hour: Number(parts.hour) % 24,
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+  };
 }
 
-function daysFromNow(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+/** How far `zone` is ahead of UTC at a given instant, in milliseconds. */
+function zoneOffsetMs(instant: Date, zone: string): number {
+  const p = partsIn(instant, zone);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - instant.getTime();
 }
+
+/** Today (± offsetDays) as YYYY-MM-DD *in the org's timezone*. */
+function todayInZone(offsetDays = 0): string {
+  const p = partsIn(new Date(Date.now() + offsetDays * 86_400_000), TZ);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
+}
+
+/** The instant at which it is `hour:minute` TODAY in the org's timezone. */
+function todayAt(hour: number, minute = 0): Date {
+  const p = partsIn(new Date(), TZ);
+
+  // The wall-clock time we want, read as if it were UTC…
+  const asIfUtc = Date.UTC(p.year, p.month - 1, p.day, hour, minute, 0);
+
+  // …then shifted back by the zone's offset, giving the instant at which the zone
+  // actually reads that wall-clock time.
+  return new Date(asIfUtc - zoneOffsetMs(new Date(asIfUtc), TZ));
+}
+
+const daysFromNow = (days: number): string => todayInZone(days);
 
 async function seed() {
   console.log("Seeding AssetFlow…\n");

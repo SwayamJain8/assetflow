@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, GripVertical, Plus, Search } from "lucide-react";
+import { AlertTriangle, GripVertical, ImageUp, Paperclip, Plus, Search, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -13,7 +13,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useCan } from "@/context/auth";
-import { ApiError, get, patch, post } from "@/lib/api";
+import { ApiError, fileUrl, get, patch, post, upload } from "@/lib/api";
 import type { Asset, Employee, MaintenanceRequest, MaintenanceStatus } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -41,6 +41,8 @@ function MaintenanceScreen() {
   const [isRaising, setIsRaising] = useState(false);
   const [assetQuery, setAssetQuery] = useState("");
   const [pickedAsset, setPickedAsset] = useState<Asset | null>(null);
+  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   /*
    * The dragged card lives in a REF, not in state.
@@ -95,7 +97,33 @@ function MaintenanceScreen() {
   };
 
   const raise = useMutation({
-    mutationFn: (input: Record<string, unknown>) => post("/maintenance", input),
+    /*
+     * Two steps, in order: create the request, THEN attach the photo to it.
+     *
+     * The photo endpoint needs the request's id, and the id only exists once the
+     * row does. Sending the image as part of the create would mean a multipart body
+     * for a route that is otherwise a clean JSON contract — and the upload would be
+     * inside the same transaction as the business write, so a rejected image would
+     * roll back a perfectly valid request.
+     *
+     * If the upload fails the request still stands; the user is told the photo did
+     * not attach, not that their request vanished.
+     */
+    mutationFn: async (input: Record<string, unknown>) => {
+      const created = await post<MaintenanceRequest>("/maintenance", input);
+
+      if (photo) {
+        try {
+          await upload(`/maintenance/${created.id}/photo`, photo.file);
+        } catch {
+          toast.error("The request was raised, but the photo was rejected.", {
+            description: "Use a real PNG, JPEG, WebP, or PDF.",
+          });
+        }
+      }
+
+      return created;
+    },
     onSuccess: () => {
       refresh();
       toast.success("Maintenance request raised", {
@@ -103,6 +131,7 @@ function MaintenanceScreen() {
       });
       setIsRaising(false);
       setPickedAsset(null);
+      setPhoto(null);
       setErrors({});
     },
     onError: (error) => {
@@ -295,6 +324,19 @@ function MaintenanceScreen() {
                             {request.issueDescription}
                           </p>
 
+                          {request.photoPath && (
+                            <a
+                              href={fileUrl(request.photoPath)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              className="mt-1.5 flex items-center gap-1 text-[10px] text-primary hover:underline"
+                            >
+                              <Paperclip className="size-2.5" />
+                              View photo
+                            </a>
+                          )}
+
                           {request.technicianName && (
                             <p className="mt-1 text-[10px] text-muted">
                               tech: {request.technicianName}
@@ -357,6 +399,7 @@ function MaintenanceScreen() {
         onClose={() => {
           setIsRaising(false);
           setPickedAsset(null);
+          setPhoto(null);
           setErrors({});
         }}
         title="Raise maintenance request"
@@ -454,6 +497,58 @@ function MaintenanceScreen() {
                 </option>
               ))}
             </Select>
+          </Field>
+
+          <Field label="Photo" hint="A picture of the fault helps whoever approves it.">
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) setPhoto({ file, preview: URL.createObjectURL(file) });
+              }}
+            />
+
+            {photo ? (
+              <div className="flex items-center gap-3 rounded-lg border border-line bg-surface-2 p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photo.preview}
+                  alt=""
+                  className="size-12 shrink-0 rounded-md border border-line object-cover"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs text-fg">{photo.file.name}</p>
+                  <p className="text-[11px] text-subtle">
+                    {(photo.file.size / 1024).toFixed(0)} KB
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    URL.revokeObjectURL(photo.preview);
+                    setPhoto(null);
+                  }}
+                  className="cursor-pointer rounded p-1 text-subtle transition-colors hover:text-danger"
+                  aria-label="Remove photo"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => photoInput.current?.click()}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-line py-3 text-xs text-subtle transition-colors hover:border-primary/40 hover:text-muted"
+              >
+                <ImageUp className="size-4" />
+                Attach a photo
+              </button>
+            )}
           </Field>
         </form>
       </Modal>

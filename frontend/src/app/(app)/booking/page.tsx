@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertOctagon, CalendarClock, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { AlertOctagon, CalendarClock, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
-import { ApiError, get, post } from "@/lib/api";
+import { ApiError, get, patch, post } from "@/lib/api";
 import type { Booking, Resource } from "@/lib/types";
 import { cn, formatTime } from "@/lib/utils";
 
@@ -45,6 +45,7 @@ export default function BookingPage() {
   const [day, setDay] = useState(today());
   const [draft, setDraft] = useState<{ start: Date; end: Date } | null>(null);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [rescheduling, setRescheduling] = useState<Booking | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: resources = [] } = useQuery({
@@ -112,6 +113,38 @@ export default function BookingPage() {
         setConflicts(details.conflicts ?? []);
         setDraft(null);
 
+        toast.error(error.message, { description: "The clashing slots are highlighted in red." });
+        return;
+      }
+
+      setErrors(error.fieldErrors);
+      if (!Object.keys(error.fieldErrors).length) toast.error(error.message);
+    },
+  });
+
+  /**
+   * Rescheduling is an UPDATE, and the exclusion constraint guards updates exactly
+   * as it guards inserts — a booking cannot be moved on top of another one. So it
+   * gets the same treatment as creating: no pre-check, and the 409's conflicts paint
+   * the clashing rows red.
+   */
+  const reschedule = useMutation({
+    mutationFn: ({ id, ...input }: { id: string; startsAt: string; endsAt: string }) =>
+      patch(`/bookings/${id}`, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Booking rescheduled");
+      setRescheduling(null);
+      setConflicts([]);
+    },
+    onError: (error) => {
+      if (!(error instanceof ApiError)) return;
+
+      if (error.code === "BOOKING_OVERLAP") {
+        const details = error.details as { conflicts: Conflict[] };
+        setConflicts(details.conflicts ?? []);
+        setRescheduling(null);
         toast.error(error.message, { description: "The clashing slots are highlighted in red." });
         return;
       }
@@ -314,8 +347,19 @@ export default function BookingPage() {
                           initial={{ opacity: 0, x: -4 }}
                           animate={{ opacity: 1, x: 0 }}
                           style={{ top: clampedTop, height: clampedHeight }}
+                          onClick={() => {
+                            // Only your own bookings, and only ones still upcoming.
+                            if (booking.isMine && booking.status === "upcoming") {
+                              setConflicts([]);
+                              setErrors({});
+                              setRescheduling(booking);
+                            }
+                          }}
                           className={cn(
                             "group absolute right-1 left-1 overflow-hidden rounded-md border px-2 py-1",
+                            booking.isMine &&
+                              booking.status === "upcoming" &&
+                              "cursor-pointer hover:brightness-125",
                             booking.status === "ongoing"
                               ? "border-brand-500/40 bg-brand-500/20"
                               : booking.status === "completed"
@@ -338,7 +382,10 @@ export default function BookingPage() {
 
                             {booking.status !== "completed" && booking.isMine && (
                               <button
-                                onClick={() => cancel.mutate(booking.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  cancel.mutate(booking.id);
+                                }}
                                 className="shrink-0 cursor-pointer rounded p-0.5 text-subtle opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger"
                                 aria-label="Cancel booking"
                               >
@@ -379,7 +426,8 @@ export default function BookingPage() {
 
             <footer className="flex items-center justify-between border-t border-line bg-surface-2 px-4 py-2.5">
               <p className="text-[11px] text-subtle">
-                Click any free slot to book it. Overlaps are refused by the database.
+                Click a free slot to book it, or one of your own to reschedule it.
+                Overlaps are refused by the database.
               </p>
 
               <div className="flex items-center gap-3 text-[10px] text-subtle">
@@ -494,6 +542,95 @@ export default function BookingPage() {
               A booking that ends exactly when another begins is fine — the ranges are half-open,
               so 10:00–11:00 may follow 09:00–10:00.
             </p>
+          </form>
+        )}
+      </Modal>
+
+      {/* ── Reschedule ─────────────────────────────────────────────────── */}
+      <Modal
+        open={Boolean(rescheduling)}
+        onClose={() => setRescheduling(null)}
+        title={`Reschedule ${rescheduling?.resourceName ?? ""}`}
+        description="The exclusion constraint guards updates too — a booking cannot be moved on top of another."
+        footer={
+          <>
+            <Button
+              variant="danger"
+              onClick={() => {
+                cancel.mutate(rescheduling!.id);
+                setRescheduling(null);
+              }}
+            >
+              Cancel booking
+            </Button>
+
+            <div className="flex-1" />
+
+            <Button variant="secondary" onClick={() => setRescheduling(null)}>
+              Close
+            </Button>
+
+            <Button form="reschedule-form" type="submit" loading={reschedule.isPending}>
+              Reschedule
+            </Button>
+          </>
+        }
+      >
+        {rescheduling && (
+          <form
+            id="reschedule-form"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              setErrors({});
+
+              const data = new FormData(event.currentTarget);
+              const [sh, sm] = String(data.get("start")).split(":").map(Number);
+              const [eh, em] = String(data.get("end")).split(":").map(Number);
+
+              const start = dayStart(day);
+              start.setHours(sh!, sm!, 0, 0);
+
+              const end = dayStart(day);
+              end.setHours(eh!, em!, 0, 0);
+
+              reschedule.mutate({
+                id: rescheduling.id,
+                startsAt: start.toISOString(),
+                endsAt: end.toISOString(),
+              });
+            }}
+            className="space-y-3.5"
+          >
+            <p className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs text-muted">
+              <Clock className="size-3.5 shrink-0 text-subtle" />
+              Currently
+              <span className="nums font-medium text-fg">
+                {formatTime(rescheduling.startsAt)}–{formatTime(rescheduling.endsAt)}
+              </span>
+              {rescheduling.purpose && <span className="text-subtle">· {rescheduling.purpose}</span>}
+            </p>
+
+            <div className="grid grid-cols-2 gap-3.5">
+              <Field label="New start" error={errors.startsAt} required>
+                <Input
+                  name="start"
+                  type="time"
+                  step={900}
+                  defaultValue={new Date(rescheduling.startsAt).toTimeString().slice(0, 5)}
+                  autoFocus
+                />
+              </Field>
+
+              <Field label="New end" error={errors.endsAt} required>
+                <Input
+                  name="end"
+                  type="time"
+                  step={900}
+                  defaultValue={new Date(rescheduling.endsAt).toTimeString().slice(0, 5)}
+                />
+              </Field>
+            </div>
           </form>
         )}
       </Modal>
