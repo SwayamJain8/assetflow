@@ -1,14 +1,10 @@
 import { createRoute } from "@hono/zod-openapi";
 
-import { createRouter } from "../../lib/router";
+import { createRouter, json as jsonBody } from "../../lib/router";
 import { requireAuth } from "../../middleware/auth";
 import { ctxFrom } from "../../types";
 import { LoginSchema, OnboardSchema, SessionSchema, SignupSchema } from "./auth.schema";
 import { currentSession, login, onboardOrganization, signup } from "./auth.service";
-
-const jsonBody = (schema: unknown) => ({
-  content: { "application/json": { schema: schema as never } },
-});
 
 // createRouter(), not `new OpenAPIHono()` — see lib/router.ts. Building it by
 // hand would skip the validation hook and leak raw ZodErrors to the client.

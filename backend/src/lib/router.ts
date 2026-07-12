@@ -1,7 +1,19 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
+import { OpenAPIHono, type z } from "@hono/zod-openapi";
 
 import type { ApiErrorBody } from "../middleware/error-handler";
 import type { AppEnv } from "../types";
+
+/**
+ * Shorthand for an application/json request body or response.
+ *
+ * Generic on purpose: casting the schema to `never` here would silently discard
+ * the response type, and `c.json()` would then accept anything — losing exactly
+ * the compile-time guarantee that a handler returns what its OpenAPI contract
+ * promises.
+ */
+export const json = <T extends z.ZodTypeAny>(schema: T) => ({
+  content: { "application/json": { schema } },
+});
 
 /**
  * Every module's router MUST be created with this factory — never with

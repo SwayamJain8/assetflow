@@ -7,7 +7,10 @@ import { env } from "./config/env";
 import { createRouter } from "./lib/router";
 import { onError, onNotFound } from "./middleware/error-handler";
 import { authRouter } from "./modules/auth/auth.routes";
+import { categoriesRouter } from "./modules/categories/categories.routes";
+import { departmentsRouter } from "./modules/departments/departments.routes";
 import { healthRouter } from "./modules/health/health.routes";
+import { usersRouter } from "./modules/users/users.routes";
 
 /**
  * Builds the Hono app. Kept separate from the server entry point (index.ts) so
@@ -35,6 +38,9 @@ export function createApp() {
   // Each mounts its own router here.
   app.route("/api", healthRouter);
   app.route("/api", authRouter);
+  app.route("/api", departmentsRouter);
+  app.route("/api", categoriesRouter);
+  app.route("/api", usersRouter);
 
   app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
     type: "http",
