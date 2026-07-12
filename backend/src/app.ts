@@ -12,6 +12,7 @@ import { auditRouter } from "./modules/audit/audit.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { bookingsRouter } from "./modules/bookings/bookings.routes";
 import { categoriesRouter } from "./modules/categories/categories.routes";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { departmentsRouter } from "./modules/departments/departments.routes";
 import { filesRouter } from "./modules/files/files.routes";
 import { healthRouter } from "./modules/health/health.routes";
@@ -52,6 +53,7 @@ export function createApp() {
   app.route("/api", bookingsRouter);
   app.route("/api", maintenanceRouter);
   app.route("/api", auditRouter);
+  app.route("/api", dashboardRouter);
   app.route("/api", filesRouter);
 
   app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {

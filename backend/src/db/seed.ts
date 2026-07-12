@@ -155,9 +155,27 @@ async function seed() {
     { assetTag: "AF-0335", name: "Portable Projector", categoryId: electronics!.id, status: "reserved" as const, location: "HQ Floor 1", departmentId: facilities!.id, acquisitionCost: "30000.00", acquisitionDate: "2024-01-05", condition: "good" as const },
   ];
 
+  /**
+   * Assets are backdated to their acquisition date.
+   *
+   * Without this, every asset is "created" the instant the seed runs, and the idle
+   * report — which measures the time since an asset was last used, falling back to
+   * when it was registered — reports 0 days for everything. A brand-new database
+   * would claim nothing has ever been idle, which is exactly the number that makes
+   * the report look broken rather than empty.
+   */
+  const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000);
+
   const assets = await db
     .insert(s.assets)
-    .values(assetRows.map((a) => ({ ...a, organizationId: orgId, createdBy: raj!.id })))
+    .values(
+      assetRows.map((a) => ({
+        ...a,
+        organizationId: orgId,
+        createdBy: raj!.id,
+        createdAt: a.acquisitionDate ? new Date(a.acquisitionDate) : daysAgo(120),
+      })),
+    )
     .returning();
 
   const byTag = (tag: string) => assets.find((a) => a.assetTag === tag)!;
@@ -171,19 +189,21 @@ async function seed() {
 
   // ── Allocations ──────────────────────────────────────────────────────────
   // The open row (returned_at IS NULL) is what makes AF-0114 un-allocatable.
+  // allocatedAt is backdated too — an asset allocated "just now" tells the usage
+  // reports nothing about how long it has actually been out.
   await db.insert(s.allocations).values([
-    { organizationId: orgId, assetId: byTag("AF-0114").id, holderUserId: priya!.id, allocatedBy: raj!.id, expectedReturnDate: daysFromNow(30) },
-    { organizationId: orgId, assetId: byTag("AF-0012").id, holderUserId: arjun!.id, allocatedBy: raj!.id, expectedReturnDate: daysFromNow(14) },
-    { organizationId: orgId, assetId: byTag("AF-0033").id, holderDepartmentId: facilities!.id, allocatedBy: raj!.id },
-    { organizationId: orgId, assetId: byTag("AF-0140").id, holderUserId: sana!.id, allocatedBy: raj!.id, expectedReturnDate: daysFromNow(7) },
+    { organizationId: orgId, assetId: byTag("AF-0114").id, holderUserId: priya!.id, allocatedBy: raj!.id, allocatedAt: daysAgo(28), expectedReturnDate: daysFromNow(30) },
+    { organizationId: orgId, assetId: byTag("AF-0012").id, holderUserId: arjun!.id, allocatedBy: raj!.id, allocatedAt: daysAgo(45), expectedReturnDate: daysFromNow(14) },
+    { organizationId: orgId, assetId: byTag("AF-0033").id, holderDepartmentId: facilities!.id, allocatedBy: raj!.id, allocatedAt: daysAgo(60) },
+    { organizationId: orgId, assetId: byTag("AF-0140").id, holderUserId: sana!.id, allocatedBy: raj!.id, allocatedAt: daysAgo(12), expectedReturnDate: daysFromNow(7) },
 
     // OVERDUE: due 3 days ago and still not returned. The dashboard's red banner
     // and the overdue cron both key off exactly this shape.
-    { organizationId: orgId, assetId: byTag("AF-0021").id, holderUserId: vikram!.id, allocatedBy: raj!.id, expectedReturnDate: daysFromNow(-3) },
+    { organizationId: orgId, assetId: byTag("AF-0021").id, holderUserId: vikram!.id, allocatedBy: raj!.id, allocatedAt: daysAgo(40), expectedReturnDate: daysFromNow(-3) },
 
     // A CLOSED allocation — the asset came back. This is history, and it proves
     // the partial unique index permits many returned rows per asset.
-    { organizationId: orgId, assetId: byTag("AF-0201").id, holderUserId: arjun!.id, allocatedBy: raj!.id, returnedAt: new Date(Date.now() - 86_400_000 * 10), returnConditionNotes: "Returned in good condition. Minor scuff on the armrest." },
+    { organizationId: orgId, assetId: byTag("AF-0201").id, holderUserId: arjun!.id, allocatedBy: raj!.id, allocatedAt: daysAgo(50), returnedAt: daysAgo(10), returnConditionNotes: "Returned in good condition. Minor scuff on the armrest." },
   ]);
 
   // ── Transfer requests ────────────────────────────────────────────────────
@@ -205,13 +225,49 @@ async function seed() {
   ]);
 
   // ── Maintenance (one card per Kanban column) ─────────────────────────────
+  // The live board (5 open cards, one per column) …
   await db.insert(s.maintenanceRequests).values([
     { organizationId: orgId, assetId: byTag("AF-0062").id, reportedBy: rohan!.id, issueDescription: "Projector bulb not turning on.", priority: "high", status: "pending" },
     { organizationId: orgId, assetId: byTag("AF-0088").id, reportedBy: priya!.id, issueDescription: "Monitor flickers intermittently on the HDMI input.", priority: "medium", status: "approved", approvedBy: raj!.id, approvedAt: new Date() },
     { organizationId: orgId, assetId: byTag("AF-0078").id, reportedBy: sana!.id, issueDescription: "Forklift hydraulics leaking.", priority: "critical", status: "technician_assigned", approvedBy: raj!.id, approvedAt: new Date(), technicianId: vikram!.id },
     { organizationId: orgId, assetId: byTag("AF-0055").id, reportedBy: vikram!.id, issueDescription: "Printer jams on every duplex job. Parts ordered.", priority: "low", status: "in_progress", approvedBy: raj!.id, approvedAt: new Date(), technicianId: vikram!.id },
-    { organizationId: orgId, assetId: byTag("AF-0410").id, reportedBy: rohan!.id, issueDescription: "Chair gas lift replaced.", priority: "low", status: "resolved", approvedBy: raj!.id, approvedAt: new Date(Date.now() - 86_400_000 * 5), technicianId: vikram!.id, resolvedAt: new Date(), resolutionNotes: "Gas lift replaced under warranty." },
+    { organizationId: orgId, assetId: byTag("AF-0410").id, reportedBy: rohan!.id, issueDescription: "Chair gas lift replaced.", priority: "low", status: "resolved", approvedBy: raj!.id, approvedAt: daysAgo(5), technicianId: vikram!.id, resolvedAt: new Date(), resolutionNotes: "Gas lift replaced under warranty." },
   ]);
+
+  // … plus resolved history spread across the past year, so the maintenance-frequency
+  // line chart has an actual trend to draw. Without this every request sits in the
+  // current month and the chart is a flat line with one spike at the end.
+  const historicalIssues: Array<[string, number, string]> = [
+    ["AF-0062", 30, "Lamp replaced after 2000 hours."],
+    ["AF-0062", 95, "Fan cleaned, overheating resolved."],
+    ["AF-0078", 60, "Annual hydraulics service."],
+    ["AF-0078", 150, "Brake pads replaced."],
+    ["AF-0055", 45, "Toner sensor recalibrated."],
+    ["AF-0055", 120, "Paper feed roller replaced."],
+    ["AF-0012", 75, "Battery swelled — replaced under warranty."],
+    ["AF-0088", 190, "Dead pixel cluster; panel swapped."],
+    ["AF-0343", 100, "Tyre puncture repaired."],
+    ["AF-0410", 220, "Castors replaced."],
+    ["AF-0201", 260, "Armrest bolt tightened."],
+    ["AF-0021", 300, "Screen protector reapplied."],
+  ];
+
+  await db.insert(s.maintenanceRequests).values(
+    historicalIssues.map(([tag, days, notes]) => ({
+      organizationId: orgId,
+      assetId: byTag(tag).id,
+      reportedBy: rohan!.id,
+      issueDescription: notes,
+      priority: "medium" as const,
+      status: "resolved" as const,
+      approvedBy: raj!.id,
+      approvedAt: daysAgo(days),
+      technicianId: vikram!.id,
+      resolvedAt: daysAgo(days - 2),
+      resolutionNotes: notes,
+      createdAt: daysAgo(days),
+    })),
+  );
 
   // ── Audit cycle (open, with 2 discrepancies already flagged) ─────────────
   const [cycle] = await db
