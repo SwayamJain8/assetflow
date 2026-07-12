@@ -15,8 +15,11 @@ import { categoriesRouter } from "./modules/categories/categories.routes";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { departmentsRouter } from "./modules/departments/departments.routes";
 import { filesRouter } from "./modules/files/files.routes";
+import { jobsRouter } from "./modules/jobs/jobs.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { maintenanceRouter } from "./modules/maintenance/maintenance.routes";
+import { notificationsRouter } from "./modules/notifications/notifications.routes";
+import { realtimeRouter } from "./modules/realtime/realtime.routes";
 import { usersRouter } from "./modules/users/users.routes";
 
 /**
@@ -54,6 +57,9 @@ export function createApp() {
   app.route("/api", maintenanceRouter);
   app.route("/api", auditRouter);
   app.route("/api", dashboardRouter);
+  app.route("/api", notificationsRouter);
+  app.route("/api", jobsRouter);
+  app.route("/api", realtimeRouter);
   app.route("/api", filesRouter);
 
   app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {

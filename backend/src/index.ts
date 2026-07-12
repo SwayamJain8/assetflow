@@ -1,6 +1,8 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, pingDatabase } from "./config/db";
+import { startScheduler } from "./jobs";
+import { websocket } from "./modules/realtime/realtime.routes";
 
 const app = createApp();
 
@@ -11,10 +13,18 @@ if (!(await pingDatabase())) {
 const server = Bun.serve({
   port: env.PORT,
   fetch: app.fetch,
+
+  // Bun's native WebSocket support. `websocket` comes from Hono's
+  // createBunWebSocket(); without passing it here, the upgrade in
+  // modules/realtime would silently never complete.
+  websocket,
 });
+
+startScheduler();
 
 console.log(`AssetFlow API listening on http://localhost:${server.port} (${env.NODE_ENV})`);
 console.log(`API docs:     http://localhost:${server.port}/api/docs`);
+console.log(`WebSocket:    ws://localhost:${server.port}/api/ws?token=<jwt>`);
 
 /**
  * Docker sends SIGTERM on `docker stop`. Draining in-flight requests and closing

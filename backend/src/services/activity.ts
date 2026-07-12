@@ -2,8 +2,28 @@ import { db } from "../config/db";
 import { activityLogs, notifications } from "../db/schema";
 import type { notificationType } from "../db/schema";
 import type { Ctx } from "../types";
+import { broadcast } from "./realtime";
 
 type NotificationType = (typeof notificationType.enumValues)[number];
+
+/**
+ * Which screens a given entity's changes affect.
+ *
+ * This map is the whole of "real-time": because every mutation already funnels
+ * through record(), adding an entry here makes that mutation live on every screen
+ * listed — with no change at any call site.
+ */
+const AFFECTS: Record<string, string[]> = {
+  asset: ["assets", "dashboard", "allocations", "reports"],
+  allocation: ["allocations", "assets", "dashboard"],
+  transfer: ["transfers", "allocations", "dashboard"],
+  booking: ["bookings", "dashboard", "reports"],
+  maintenance: ["maintenance", "assets", "dashboard", "reports"],
+  audit: ["audit", "assets", "dashboard"],
+  department: ["departments", "reports"],
+  category: ["categories", "assets"],
+  user: ["users"],
+};
 
 export type RecordInput = {
   /** 'asset' | 'allocation' | 'booking' | 'maintenance' | 'audit' | 'department' | … */
@@ -65,7 +85,29 @@ export async function record(ctx: Ctx, input: RecordInput): Promise<void> {
         link: input.notify.link ?? null,
       });
     }
+
+    /**
+     * …and the whole app goes live.
+     *
+     * Every mutation in AssetFlow already calls record(). Adding the broadcast
+     * HERE — rather than at each of the ~20 call sites — is what makes the
+     * dashboard, the Kanban board, the booking grid, and the notification bell
+     * update without a refresh, without any of those modules knowing that
+     * WebSockets exist.
+     */
+    broadcast(ctx.orgId, {
+      type: "invalidate",
+      keys: [
+        ...(AFFECTS[input.entity] ?? []),
+        // Anything that notifies somebody also changes the bell.
+        ...(input.notify ? ["notifications"] : []),
+        "activity",
+      ],
+      message: input.summary,
+    });
   } catch (error) {
+    // An audit-trail failure must never roll back the business action that
+    // succeeded. The booking happened; we just failed to write it down.
     console.error("Failed to record activity:", error);
   }
 }

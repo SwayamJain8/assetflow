@@ -295,7 +295,12 @@ async function seed() {
     { organizationId: orgId, userId: raj!.id, type: "maintenance_approved", title: "Maintenance request AF-0055 approved", body: "HP LaserJet Printer — work can begin.", link: "/maintenance", createdAt: ago(18) },
     { organizationId: orgId, userId: aditi!.id, type: "booking_confirmed", title: "Booking confirmed: Room B2", body: "Today 09:00–10:00 — Procurement Team sync.", link: "/booking", createdAt: ago(60) },
     { organizationId: orgId, userId: rohan!.id, type: "transfer_approved", title: "Transfer approved: AF-0033 to Facilities", body: "Conference Speakerphone re-allocated.", link: "/allocation", createdAt: ago(180) },
-    { organizationId: orgId, userId: vikram!.id, type: "overdue_return", title: "Overdue return: AF-0021", body: "iPad Pro 12.9 was due 3 days ago.", link: "/allocation", createdAt: ago(1440) },
+
+    // NOTE: no overdue_return notification is seeded, even though AF-0021 IS
+    // overdue. That is on purpose — the overdue-returns cron job generates it.
+    // Seeding one too would both duplicate the job's output and spoil the demo:
+    // the point is to trigger the job (POST /api/jobs/overdue-returns/run) and
+    // watch the alert land in Vikram's bell live, over the WebSocket.
     { organizationId: orgId, userId: admin!.id, type: "audit_discrepancy", title: "Audit discrepancy flagged: AF-0088 damaged", body: "Q3 Audit — Engineering: cracked panel.", link: "/audit", createdAt: ago(2880) },
     { organizationId: orgId, userId: admin!.id, type: "audit_discrepancy", title: "Audit discrepancy flagged: AF-0020 missing", body: "Q3 Audit — Engineering: not at the expected desk.", link: "/audit", createdAt: ago(2900) },
     { organizationId: orgId, userId: priya!.id, type: "booking_reminder", title: "Room B2 booking starts soon", body: "Design review at 14:00.", link: "/booking", createdAt: ago(5) },
