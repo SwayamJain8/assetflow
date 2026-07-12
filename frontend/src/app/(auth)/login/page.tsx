@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyRound, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
@@ -7,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/context/auth";
 import { ApiError } from "@/lib/api";
 
@@ -26,6 +28,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isRecovering, setIsRecovering] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -79,6 +82,7 @@ export default function LoginPage() {
   }
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
@@ -140,21 +144,35 @@ export default function LoginPage() {
           />
         </Field>
 
-        <Field
-          label="Password"
-          error={errors.password}
-          required
-          hint={mode === "signup" ? "At least 8 characters." : undefined}
-        >
-          <Input
-            type="password"
-            value={form.password}
-            onChange={set("password")}
-            placeholder="••••••••"
-            invalid={Boolean(errors.password)}
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-          />
-        </Field>
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between">
+            <label className="block text-xs font-medium text-muted">
+              Password
+              <span className="ml-0.5 text-danger">*</span>
+            </label>
+
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => setIsRecovering(true)}
+                className="cursor-pointer text-[11px] font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </button>
+            )}
+          </div>
+
+          <Field error={errors.password} hint={mode === "signup" ? "At least 8 characters." : undefined}>
+            <Input
+              type="password"
+              value={form.password}
+              onChange={set("password")}
+              placeholder="••••••••"
+              invalid={Boolean(errors.password)}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+            />
+          </Field>
+        </div>
 
         <Button type="submit" loading={isSubmitting} className="w-full" size="lg">
           {mode === "login" ? "Sign in" : "Create account"}
@@ -232,5 +250,59 @@ export default function LoginPage() {
         </div>
       )}
     </motion.div>
+
+      {/*
+       * Password recovery.
+       *
+       * AssetFlow has no email service — deliberately: the brief asks us to minimise
+       * third-party dependencies, and an internal ERP that silently mails reset links
+       * from an unverified domain is a worse answer than an explicit one.
+       *
+       * So recovery is what it is in most internal tools: an Admin resets it. That
+       * keeps the reset path inside the same role boundary as every other privileged
+       * action — the Employee Directory — rather than opening a second, unauthenticated
+       * way to take over an account.
+       */}
+      <Modal
+        open={isRecovering}
+        onClose={() => setIsRecovering(false)}
+        title="Forgot your password?"
+        description="Your Admin can reset it for you."
+        size="sm"
+        footer={
+          <Button onClick={() => setIsRecovering(false)} className="w-full">
+            Got it
+          </Button>
+        }
+      >
+        <div className="space-y-3.5">
+          <div className="flex items-start gap-3 rounded-lg border border-line bg-surface-2 p-3">
+            <div className="rounded-md bg-primary/12 p-2">
+              <KeyRound className="size-4 text-primary" />
+            </div>
+
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-fg">Ask an Admin to reset it</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+                An Admin can set a new password for you from{" "}
+                <span className="font-medium text-fg">Organization setup → Employee</span>. You will
+                be able to change it once you are signed in.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-lg border border-info/25 bg-info-soft p-3">
+            <ShieldCheck className="mt-px size-4 shrink-0 text-info" />
+
+            <p className="text-[11px] leading-relaxed text-muted">
+              <span className="font-medium text-fg">Why not an email link?</span> AssetFlow sends no
+              email by design. A reset link is a second, unauthenticated route into an account —
+              keeping resets with an Admin holds them to the same role boundary as every other
+              privileged action.
+            </p>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
