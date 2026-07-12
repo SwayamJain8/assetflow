@@ -8,6 +8,7 @@ import { createRouter } from "./lib/router";
 import { onError, onNotFound } from "./middleware/error-handler";
 import { allocationsRouter } from "./modules/allocations/allocations.routes";
 import { assetsRouter } from "./modules/assets/assets.routes";
+import { auditRouter } from "./modules/audit/audit.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { bookingsRouter } from "./modules/bookings/bookings.routes";
 import { categoriesRouter } from "./modules/categories/categories.routes";
@@ -50,6 +51,7 @@ export function createApp() {
   app.route("/api", allocationsRouter);
   app.route("/api", bookingsRouter);
   app.route("/api", maintenanceRouter);
+  app.route("/api", auditRouter);
   app.route("/api", filesRouter);
 
   app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
