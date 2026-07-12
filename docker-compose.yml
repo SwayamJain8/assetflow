@@ -52,5 +52,21 @@ services:
       # filesystem is ephemeral and every image vanishes on redeploy.
       - ./backend/uploads:/app/uploads
 
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* is inlined at BUILD time. The browser — not the container —
+        # makes this call, so it must be an address the browser can reach:
+        # localhost, never the compose service name.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+    container_name: assetflow-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
 volumes:
   postgres-data:

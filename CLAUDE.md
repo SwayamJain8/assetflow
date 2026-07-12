@@ -403,28 +403,48 @@ Notification, ActivityLog.
 - **Migrations are committed** (`backend/src/db/migrations/`). Use
   `bun db:generate` + `bun db:migrate`; never `drizzle-kit push` for real changes.
 
-## 15. Current status
+## 15. Current status — ✅ COMPLETE
 
-**Scaffolding is DONE and verified running. No commits yet.**
+**Everything in this document is built, running, and verified.** `docker compose up -d`
+starts Postgres + API + UI; the API migrates its own schema on boot.
 
-- `.gitignore` written (root, covers both halves). AI-tool config clutter is
-  ignored; `docs/` + `CLAUDE.md` are tracked.
-- `frontend/` — Next.js 16 App Router + React 19 + Tailwind v4 + TS. `bun run build`
-  passes. Still the stock starter page; no AssetFlow UI yet.
-- `backend/` — Bun + Hono + Drizzle + Zod, layered per section 4
-  (`config/`, `db/schema/`, `modules/`, `middleware/`, `services/`, `jobs/`).
-  Verified live: `GET /api/health` → `{"status":"ok","database":"up"}`, Swagger UI
-  at `/api/docs`. Only the health module exists so far.
-- `docker-compose.yml` (root) runs Postgres 17 + the API; `backend/Dockerfile` is a
-  multi-stage `oven/bun:1.3-alpine` build, non-root, with a healthcheck.
-- Auth will use **Bun's built-in `Bun.password`** (argon2) and **`hono/jwt`** — no
-  bcrypt/jsonwebtoken dependency needed.
+| | |
+|---|---|
+| Database | 14 tables, 11 native enums, both showpiece constraints live |
+| Backend | 13 modules, ~55 endpoints, OpenAPI at `/api/docs` |
+| Frontend | all 10 screens, 17 routes, production build passes |
+| Tests | backend 11/11 · theme 19/19 · e2e 11/11, 0 console errors |
+| Differentiators | all 4 shipped (real-time, logo→theme, timeline, ⌘K) |
 
-**Next steps:** (1) design the schema in `docs/database-schema.md` with the two
-showpiece constraints, (2) write the Drizzle tables in `backend/src/db/schema/`
-and generate the first migration (add `CREATE EXTENSION btree_gist` there),
-(3) build the spine in section 6 order. Make the first Git commit now — the repo
-still has zero commits, and "proper Git usage" is a judged criterion.
+**Docs to read first:** [README.md](README.md) · [docs/database-schema.md](docs/database-schema.md)
+· [docs/DEMO.md](docs/DEMO.md) — every claim is verifiable in one paste.
+
+### Decisions that differ from the original plan
+
+- **Deploy: local Docker only.** Vercel (HTTPS) + EC2 (HTTP) = the browser blocks
+  every call as mixed content. Criterion #2 asks for a *local* database anyway.
+- **A bookable resource is an asset** with `is_bookable = true`, not a second table.
+- **Migrations run on boot** (`db/migrate.ts`), because `drizzle-kit` is a dev
+  dependency and is absent from the production image.
+- **Maintenance resolution restores `allocated`**, not `available`, when an open
+  allocation exists — the spec says "back to Available", but that would contradict
+  the allocation row when the holder raised the ticket and still has the asset.
+
+### Traps already hit (do not re-learn these)
+
+- Drizzle wraps driver errors: the real Postgres SQLSTATE is on `.cause`
+  (`utils/pg-error.ts`). Without unwrapping, both showpiece 409s degrade to 500s.
+- Drizzle only qualifies interpolated columns in raw SQL when the query has a JOIN.
+  Without one it emits a bare `"id"` and correlated subqueries silently return 0.
+- Tailwind v4: `@theme inline` (a plain `@theme` bakes at build time and the
+  logo→theme feature silently does nothing) + `@custom-variant dark`.
+- A CSS `transform` on an ancestor makes it the containing block for
+  `position: fixed` — overlays must be portalled to `<body>`.
+- `bun test` forces `TZ=UTC` while `bun run` uses local; never write a
+  wall-clock-dependent test.
+- Server-composed times use `APP_TIMEZONE`, never the process timezone. Postgres
+  `extract(hour ...)` needs `AT TIME ZONE` too.
+- A passing `bun dev` is not a passing `next build` (Recharts types).
 
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph

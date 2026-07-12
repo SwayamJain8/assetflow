@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, pingDatabase } from "./config/db";
+import { runMigrations } from "./db/migrate";
 import { startScheduler } from "./jobs";
 import { websocket } from "./modules/realtime/realtime.routes";
 
@@ -8,6 +9,11 @@ const app = createApp();
 
 if (!(await pingDatabase())) {
   console.warn("Starting with an unreachable database — /api/health will report 'degraded'.");
+} else {
+  // Bring the schema up to date before serving a single request. drizzle-kit is a
+  // dev dependency and is absent from the production image, so this cannot be a
+  // CLI step — see db/migrate.ts.
+  await runMigrations();
 }
 
 const server = Bun.serve({
