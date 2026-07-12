@@ -22,6 +22,8 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { CommandPalette } from "@/components/command-palette";
+
 import { useAuth } from "@/context/auth";
 import { useTheme } from "@/context/theme";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -51,18 +53,23 @@ export function PageShell({
   subtitle,
   actions,
   children,
-  onOpenPalette,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
-  onOpenPalette?: () => void;
 }) {
   const pathname = usePathname();
   const { user, organization, logout } = useAuth();
   const { mode, toggle } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  /*
+   * The palette lives in the SHELL, not in each page. Registering the ⌘K listener
+   * once here means the shortcut works on every screen and cannot be forgotten by
+   * a new one — and there is never a second palette listening at the same time.
+   */
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // The socket only runs while somebody is signed in.
   const { isConnected } = useRealtime(Boolean(user));
@@ -200,9 +207,9 @@ export function PageShell({
             {subtitle && <p className="truncate text-xs text-muted">{subtitle}</p>}
           </div>
 
-          {onOpenPalette && (
+          {(
             <button
-              onClick={onOpenPalette}
+              onClick={() => setPaletteOpen(true)}
               className="hidden items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-subtle transition-colors hover:border-line-strong hover:text-muted md:flex cursor-pointer"
             >
               <Search className="size-3.5" />
@@ -212,6 +219,8 @@ export function PageShell({
               </kbd>
             </button>
           )}
+
+          <CommandPalette open={paletteOpen} onOpen={setPaletteOpen} />
 
           {/*
            * A live dot, not decoration: it is the honest answer to "is real-time

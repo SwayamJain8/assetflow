@@ -21,6 +21,7 @@ import { maintenanceRouter } from "./modules/maintenance/maintenance.routes";
 import { organizationRouter } from "./modules/organization/organization.routes";
 import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import { realtimeRouter } from "./modules/realtime/realtime.routes";
+import { searchRouter } from "./modules/search/search.routes";
 import { usersRouter } from "./modules/users/users.routes";
 
 /**
@@ -60,6 +61,7 @@ export function createApp() {
   app.route("/api", auditRouter);
   app.route("/api", dashboardRouter);
   app.route("/api", notificationsRouter);
+  app.route("/api", searchRouter);
   app.route("/api", jobsRouter);
   app.route("/api", realtimeRouter);
   app.route("/api", filesRouter);
