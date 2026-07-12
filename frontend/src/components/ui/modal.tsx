@@ -2,10 +2,24 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Overlays are PORTALLED to <body>, not rendered in place.
+ *
+ * This is not a stylistic preference. A CSS `transform` on any ancestor makes that
+ * ancestor the containing block for `position: fixed` descendants — so a fixed
+ * inset-0 overlay stops meaning "the viewport" and starts meaning "that div".
+ * PageShell's content wrapper animates in with a translateY, which is exactly such
+ * a transform, and it was silently trapping this panel inside the content column:
+ * measured 187px tall instead of 900, with the footer floating up mid-screen.
+ *
+ * A portal escapes the transform entirely, and keeps working no matter what
+ * animation someone adds to a parent later.
+ */
 export function Modal({
   open,
   onClose,
@@ -42,7 +56,12 @@ export function Modal({
 
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" };
 
-  return (
+  // Portals need the DOM, which does not exist during the server render.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -93,6 +112,7 @@ export function Modal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
