@@ -18,6 +18,7 @@ import { filesRouter } from "./modules/files/files.routes";
 import { jobsRouter } from "./modules/jobs/jobs.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { maintenanceRouter } from "./modules/maintenance/maintenance.routes";
+import { organizationRouter } from "./modules/organization/organization.routes";
 import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import { realtimeRouter } from "./modules/realtime/realtime.routes";
 import { usersRouter } from "./modules/users/users.routes";
@@ -48,6 +49,7 @@ export function createApp() {
   // Each mounts its own router here.
   app.route("/api", healthRouter);
   app.route("/api", authRouter);
+  app.route("/api", organizationRouter);
   app.route("/api", departmentsRouter);
   app.route("/api", categoriesRouter);
   app.route("/api", usersRouter);

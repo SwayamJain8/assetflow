@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright screenshots from the e2e smoke test — regenerated on every run.
+e2e/shots/

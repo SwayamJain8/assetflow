@@ -31,8 +31,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{
-              var m = localStorage.getItem('assetflow.mode')
-                || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+              // Dark unless the user has explicitly chosen light. AssetFlow is a
+              // dark product (see the mockups); the OS preference is not consulted,
+              // because a light-preferring OS would otherwise give first-time users
+              // a screen that looks nothing like the product's identity.
+              var m = localStorage.getItem('assetflow.mode') || 'dark';
               if (m === 'dark') document.documentElement.classList.add('dark');
               document.documentElement.style.colorScheme = m;
             }catch(e){}})();`,

@@ -18,11 +18,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>("dark");
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Mode | null;
-    const initial =
-      stored ?? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-
-    setMode(initial);
+    // Must match the inline script in layout.tsx exactly. If these two disagree,
+    // the page paints one theme and React immediately swaps it to the other.
+    setMode((localStorage.getItem(STORAGE_KEY) as Mode | null) ?? "dark");
   }, []);
 
   useEffect(() => {
