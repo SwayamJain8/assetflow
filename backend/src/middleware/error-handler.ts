@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 
 import { isProduction } from "../config/env";
+import { PG, pgErrorOf, type PgError } from "../utils/pg-error";
 
 /**
  * Every error leaves the API in one shape, so the frontend only ever parses one
@@ -31,37 +32,26 @@ export class AppError extends Error {
   }
 }
 
-/** PostgreSQL error codes we translate into friendly messages. */
-const PG_UNIQUE_VIOLATION = "23505";
-const PG_EXCLUSION_VIOLATION = "23P01";
-const PG_FOREIGN_KEY_VIOLATION = "23503";
-const PG_CHECK_VIOLATION = "23514";
-
-function isPgError(error: unknown): error is { code: string; constraint?: string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof (error as { code: unknown }).code === "string"
-  );
-}
-
 /**
- * The two showpiece constraints (CLAUDE.md §5) are enforced by PostgreSQL, not
- * by application code — so the database is what rejects a double-allocation or
- * an overlapping booking. That rejection arrives here as a driver error, and
- * this is where it becomes a clear message for the user.
+ * The two showpiece constraints (CLAUDE.md §5) are enforced by PostgreSQL, not by
+ * application code — so the database is what rejects a double-allocation or an
+ * overlapping booking. That rejection arrives here as a driver error, and this is
+ * where it becomes a clear message for the user.
+ *
+ * The database refuses the write; this function explains why.
  */
-function fromDatabaseError(error: { code: string; constraint?: string }): AppError | null {
+function fromDatabaseError(error: PgError): AppError | null {
   switch (error.code) {
-    case PG_EXCLUSION_VIOLATION:
+    // ── The booking exclusion constraint fired ──────────────────────────────
+    case PG.EXCLUSION_VIOLATION:
       return new AppError(
         409,
         "BOOKING_OVERLAP",
         "That time slot overlaps an existing booking for this resource. Pick a different slot.",
       );
 
-    case PG_UNIQUE_VIOLATION:
+    case PG.UNIQUE_VIOLATION:
+      // ── The partial unique index fired: the asset is already held ─────────
       if (error.constraint === "one_active_allocation") {
         return new AppError(
           409,
@@ -69,12 +59,30 @@ function fromDatabaseError(error: { code: string; constraint?: string }): AppErr
           "This asset is already allocated to someone else. Raise a transfer request instead.",
         );
       }
+      if (error.constraint === "users_org_email_unique") {
+        return new AppError(409, "EMAIL_TAKEN", "An account with that email already exists.");
+      }
       return new AppError(409, "DUPLICATE_VALUE", "That value is already taken.");
 
-    case PG_FOREIGN_KEY_VIOLATION:
+    case PG.FOREIGN_KEY_VIOLATION:
       return new AppError(409, "RELATED_RECORD_MISSING", "A referenced record does not exist.");
 
-    case PG_CHECK_VIOLATION:
+    // A reversed booking (ends before it starts) trips the generated tstzrange
+    // column before any CHECK constraint runs — see PG.DATA_EXCEPTION.
+    case PG.DATA_EXCEPTION:
+      return new AppError(422, "INVALID_TIME_RANGE", "A booking must end after it starts.");
+
+    case PG.CHECK_VIOLATION:
+      if (error.constraint === "booking_ends_after_it_starts") {
+        return new AppError(422, "INVALID_TIME_RANGE", "A booking must end after it starts.");
+      }
+      if (error.constraint === "allocation_has_a_holder") {
+        return new AppError(
+          422,
+          "NO_HOLDER",
+          "An allocation must name either an employee or a department.",
+        );
+      }
       return new AppError(422, "CONSTRAINT_VIOLATION", "That change violates a data rule.");
 
     default:
@@ -107,11 +115,14 @@ export const onError: ErrorHandler = (error, c: Context) => {
     );
   }
 
-  if (isPgError(error)) {
-    const mapped = fromDatabaseError(error);
+  // Drizzle wraps driver errors, so the real PostgreSQL error (with its SQLSTATE
+  // and constraint name) lives further down the `cause` chain — see utils/pg-error.
+  const pgError = pgErrorOf(error);
+  if (pgError) {
+    const mapped = fromDatabaseError(pgError);
     if (mapped) {
       return c.json<ApiErrorBody>(
-        { error: { code: mapped.code, message: mapped.message } },
+        { error: { code: mapped.code, message: mapped.message, details: mapped.details } },
         mapped.status,
       );
     }
