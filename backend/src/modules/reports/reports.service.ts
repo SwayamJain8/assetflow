@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "../../config/db";
+import { env } from "../../config/env";
 import type { Ctx } from "../../types";
 
 const toNumbers = <T extends Record<string, unknown>>(rows: T[], keys: (keyof T)[]) =>
@@ -206,10 +207,22 @@ export async function attentionNeeded(ctx: Ctx) {
  * free because nothing happened to *begin* in it.
  */
 export async function bookingHeatmap(ctx: Ctx) {
+  /**
+   * The hour and weekday are extracted in the ORGANIZATION'S timezone, not the
+   * database's.
+   *
+   * `extract(hour from timestamptz)` uses the server's TimeZone setting, which in
+   * a Docker container is UTC. A 09:00 IST booking would land in the "03:00"
+   * column, and the heatmap would confidently report that this office holds its
+   * meetings before dawn. `AT TIME ZONE` converts first, so the grid means what a
+   * human sitting in the office would say.
+   */
+  const zone = env.APP_TIMEZONE;
+
   const result = await db.execute<{ dayOfWeek: string; hour: string; bookings: string }>(sql`
     select
-      extract(dow from hours.hour)::int                                 as "dayOfWeek",
-      extract(hour from hours.hour)::int                                as hour,
+      extract(dow  from (hours.hour AT TIME ZONE ${zone}))::int         as "dayOfWeek",
+      extract(hour from (hours.hour AT TIME ZONE ${zone}))::int         as hour,
       count(*)                                                          as bookings
     from bookings b
     cross join lateral generate_series(
