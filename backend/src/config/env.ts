@@ -27,6 +27,16 @@ const envSchema = z.object({
     .string()
     .default("http://localhost:3000")
     .transform((value) => value.split(",").map((origin) => origin.trim())),
+
+  /**
+   * The organization's timezone, used for every human-readable time the SERVER
+   * composes (activity-log lines, notification bodies).
+   *
+   * Set explicitly rather than inherited from the host: a Docker container runs in
+   * UTC while a developer's laptop does not, so an ambient timezone would describe
+   * the same booking as "09:00" in one place and "14:30" in another.
+   */
+  APP_TIMEZONE: z.string().default("Asia/Kolkata"),
 });
 
 const parsed = envSchema.safeParse(process.env);

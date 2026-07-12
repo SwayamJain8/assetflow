@@ -41,6 +41,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (min 32 chars)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-604800}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # The container's own clock is UTC. Server-composed strings (activity log,
+      # notifications) are rendered in THIS zone, not the container's, so they read
+      # the same in Docker as they do on a laptop.
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
     ports:
       - "4000:4000"
     volumes:
